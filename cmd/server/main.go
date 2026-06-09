@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
-	"os"
+	"net/http"
 	"os/signal"
 	"syscall"
 
@@ -10,25 +12,38 @@ import (
 )
 
 func main() {
+	// Контекст отменяется при SIGINT/SIGTERM.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	app, err := app.NewApp()
+	application, err := app.NewApp()
 	if err != nil {
-		os.Exit(2)
+		log.Fatalf("init app: %v", err)
 	}
 
+	// Запускаем сервер в горутине.
+	errCh := make(chan error, 1)
 	go func() {
-		log.Println("server started")
-		if err := app.Run(); err != nil {
-			os.Exit(1)
+		if err := application.Run(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
 		}
+		close(errCh)
 	}()
+	log.Println("server started")
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
+	// Ждём сигнал или ошибку сервера.
+	select {
+	case <-ctx.Done():
+		log.Println("received shutdown signal")
+	case err := <-errCh:
+		if err != nil {
+			log.Printf("server error: %v", err)
+		}
+	}
+
 	log.Println("shutting down...")
-	if err := app.Shutdown(); err != nil {
-		log.Fatal(err)
+	if err := application.Shutdown(); err != nil {
+		log.Fatalf("shutdown: %v", err)
 	}
 	log.Println("server stopped")
 }

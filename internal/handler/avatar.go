@@ -3,6 +3,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -34,14 +35,15 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ограничиваем размер тела запроса.
-	r.Body = http.MaxBytesReader(w, r.Body, service.MaxFileSize+1024)
+	r.Body = http.MaxBytesReader(w, r.Body, service.MaxUploadSize+1024)
 
 	file, header, err := r.FormFile("image")
 	if err != nil {
-		if err.Error() == "http: request body too large" {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]interface{}{
 				"error":    "File too large",
-				"max_size": service.MaxFileSize,
+				"max_size": service.MaxUploadSize,
 			})
 			return
 		}
@@ -65,7 +67,7 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !service.AllowedMimeTypes[mimeType] {
+	if !service.IsAllowedMimeType(mimeType) {
 		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error":   "Invalid file format",
 			"details": "Supported formats: jpeg, png, webp",
@@ -75,15 +77,21 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	avatar, err := h.svc.Upload(r.Context(), userID, header.Filename, mimeType, header.Size, file)
 	if err != nil {
-		if strings.Contains(err.Error(), "file too large") {
+		switch {
+		case errors.Is(err, domain.ErrFileTooLarge):
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]interface{}{
 				"error":    "File too large",
-				"max_size": service.MaxFileSize,
+				"max_size": service.MaxUploadSize,
 			})
-			return
+		case errors.Is(err, domain.ErrUnsupportedFormat):
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+				"error":   "Invalid file format",
+				"details": "Supported formats: jpeg, png, webp",
+			})
+		default:
+			h.logger.Error("upload failed", "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		}
-		h.logger.Error("upload failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		return
 	}
 
@@ -165,10 +173,10 @@ func (h *AvatarHandler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 
 	thumbnails := make([]domain.Thumbnail, 0)
-	for size, key := range avatar.ThumbnailS3Keys {
+	for sizeName := range avatar.ThumbnailS3Keys {
 		thumbnails = append(thumbnails, domain.Thumbnail{
-			Size: size,
-			URL:  "/api/v1/avatars/" + avatarID + "?size=" + key,
+			Size: sizeName,
+			URL:  "/api/v1/avatars/" + avatarID + "?size=" + sizeName,
 		})
 	}
 
@@ -212,19 +220,18 @@ func (h *AvatarHandler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
 
 	err := h.svc.Delete(r.Context(), avatarID, userID)
 	if err != nil {
-		if strings.Contains(err.Error(), "forbidden") {
+		switch {
+		case errors.Is(err, domain.ErrForbidden):
 			writeJSON(w, http.StatusForbidden, map[string]interface{}{
 				"error":   "Forbidden",
 				"details": "You can only delete your own avatars",
 			})
-			return
-		}
-		if strings.Contains(err.Error(), "not found") {
+		case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrAlreadyDeleted):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Avatar not found"})
-			return
+		default:
+			h.logger.Error("delete avatar failed", "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		}
-		h.logger.Error("delete avatar failed", "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		return
 	}
 

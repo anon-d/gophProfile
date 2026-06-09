@@ -52,3 +52,9 @@ WHERE id = $1;
 UPDATE avatars
 SET upload_status = $2, updated_at = NOW()
 WHERE id = $1;
+
+-- Обновление S3-ключа после загрузки
+-- name: UpdateS3Key :exec
+UPDATE avatars
+SET s3_key = $2, updated_at = NOW()
+WHERE id = $1;

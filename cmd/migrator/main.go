@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"os"
 
@@ -10,9 +11,9 @@ import (
 )
 
 func main() {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://gophprofile:gophprofile@localhost:5432/gophprofile?sslmode=disable"
+	dsn, ok := os.LookupEnv("DATABASE_URL")
+	if !ok || dsn == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
 	m, err := migrate.New("file://migrations", dsn)
@@ -21,7 +22,7 @@ func main() {
 	}
 	defer m.Close()
 
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		log.Fatalf("migrate up: %v", err)
 	}
 

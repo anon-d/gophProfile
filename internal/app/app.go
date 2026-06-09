@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	minioclient "github.com/minio/minio-go/v7"
@@ -69,7 +70,7 @@ func NewApp() (*App, error) {
 	log.Info("kafka producer created")
 
 	// Сервис.
-	svc := service.NewAvatarService(pgRepo, s3Repo, producer, &cfg.Kafka, log)
+	svc := service.NewAvatarService(pgRepo, s3Repo, producer, cfg.Kafka.TopicUpload, cfg.Kafka.TopicDelete, log)
 
 	// Роутер.
 	router := handler.NewRouter(svc, pool, mc, log)
@@ -95,14 +96,25 @@ func (a *App) Run() error {
 
 // Shutdown корректно останавливает сервер и закрывает ресурсы.
 func (a *App) Shutdown() error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var shutdownErr error
+
 	if err := a.server.Shutdown(ctx); err != nil {
 		a.log.Error("server shutdown", "error", err)
+		shutdownErr = err
 	}
+
 	a.pool.Close()
+
 	if err := a.producer.Close(); err != nil {
 		a.log.Error("kafka producer close", "error", err)
+		if shutdownErr == nil {
+			shutdownErr = err
+		}
 	}
+
 	a.log.Info("all resources closed")
-	return nil
+	return shutdownErr
 }

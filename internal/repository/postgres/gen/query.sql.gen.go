@@ -189,3 +189,19 @@ func (q *Queries) UpdateUploadStatus(ctx context.Context, arg UpdateUploadStatus
 	_, err := q.db.Exec(ctx, updateUploadStatus, arg.ID, arg.UploadStatus)
 	return err
 }
+
+const updateS3Key = `-- name: UpdateS3Key :exec
+UPDATE avatars
+SET s3_key = $2, updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateS3KeyParams struct {
+	ID    pgtype.UUID
+	S3Key string
+}
+
+func (q *Queries) UpdateS3Key(ctx context.Context, arg UpdateS3KeyParams) error {
+	_, err := q.db.Exec(ctx, updateS3Key, arg.ID, arg.S3Key)
+	return err
+}

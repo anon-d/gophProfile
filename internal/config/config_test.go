@@ -1,17 +1,13 @@
 package config
 
-import (
-	"os"
-	"testing"
-)
+import "testing"
 
 func TestLoad_Defaults(t *testing.T) {
-	// Очищаем переменные, чтобы проверить дефолты.
-	os.Unsetenv("SERVER_ADDRESS")
-	os.Unsetenv("DATABASE_URL")
-	os.Unsetenv("MINIO_ENDPOINT")
-	os.Unsetenv("KAFKA_BROKERS")
-	os.Unsetenv("LOG_LEVEL")
+	// t.Setenv автоматически восстанавливает значение после теста.
+	// Устанавливаем пустые значения, чтобы проверить дефолты.
+	for _, key := range []string{"SERVER_ADDRESS", "DATABASE_URL", "MINIO_ENDPOINT", "KAFKA_BROKERS", "LOG_LEVEL"} {
+		t.Setenv(key, "")
+	}
 
 	cfg := Load()
 
@@ -36,14 +32,9 @@ func TestLoad_Defaults(t *testing.T) {
 }
 
 func TestLoad_FromEnv(t *testing.T) {
-	os.Setenv("SERVER_ADDRESS", ":9090")
-	os.Setenv("LOG_LEVEL", "debug")
-	os.Setenv("MINIO_BUCKET", "test-avatars")
-	defer func() {
-		os.Unsetenv("SERVER_ADDRESS")
-		os.Unsetenv("LOG_LEVEL")
-		os.Unsetenv("MINIO_BUCKET")
-	}()
+	t.Setenv("SERVER_ADDRESS", ":9090")
+	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("MINIO_BUCKET", "test-avatars")
 
 	cfg := Load()
 
@@ -59,13 +50,12 @@ func TestLoad_FromEnv(t *testing.T) {
 }
 
 func TestGetEnv(t *testing.T) {
-	os.Setenv("TEST_KEY", "test_value")
-	defer os.Unsetenv("TEST_KEY")
+	t.Setenv("TEST_KEY", "test_value")
 
 	if v := getEnv("TEST_KEY", "default"); v != "test_value" {
 		t.Errorf("expected test_value, got %s", v)
 	}
-	if v := getEnv("NON_EXISTENT_KEY", "fallback"); v != "fallback" {
+	if v := getEnv("NON_EXISTENT_KEY_12345", "fallback"); v != "fallback" {
 		t.Errorf("expected fallback, got %s", v)
 	}
 }

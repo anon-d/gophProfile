@@ -116,6 +116,14 @@ func (r *Repo) UpdateProcessingStatus(ctx context.Context, id, status string, th
 	})
 }
 
+// UpdateS3Key обновляет S3-ключ аватарки.
+func (r *Repo) UpdateS3Key(ctx context.Context, id, s3Key string) error {
+	return r.q.UpdateS3Key(ctx, db.UpdateS3KeyParams{
+		ID:    uuidToPgtype(id),
+		S3Key: s3Key,
+	})
+}
+
 // --- помощники ---
 
 func uuidToPgtype(s string) pgtype.UUID {
