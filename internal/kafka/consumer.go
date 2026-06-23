@@ -4,8 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/anon-d/gophProfile/internal/observability"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // MessageHandler — функция обработки сообщения.
@@ -17,10 +22,11 @@ type Consumer struct {
 	handler *groupHandler
 	topics  []string
 	logger  *slog.Logger
+	service string
 }
 
 // NewConsumer создаёт Kafka-консьюмера.
-func NewConsumer(brokers []string, groupID string, topics []string, handler MessageHandler, logger *slog.Logger) (*Consumer, error) {
+func NewConsumer(service string, brokers []string, groupID string, topics []string, handler MessageHandler, logger *slog.Logger) (*Consumer, error) {
 	cfg := sarama.NewConfig()
 	cfg.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
 	cfg.Consumer.Offsets.Initial = sarama.OffsetOldest
@@ -32,9 +38,10 @@ func NewConsumer(brokers []string, groupID string, topics []string, handler Mess
 
 	return &Consumer{
 		group:   group,
-		handler: &groupHandler{handler: handler, logger: logger},
+		handler: &groupHandler{handler: handler, logger: logger, service: service},
 		topics:  topics,
 		logger:  logger,
+		service: service,
 	}, nil
 }
 
@@ -60,6 +67,7 @@ func (c *Consumer) Close() error {
 type groupHandler struct {
 	handler MessageHandler
 	logger  *slog.Logger
+	service string
 }
 
 func (h *groupHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
@@ -67,8 +75,23 @@ func (h *groupHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil
 
 func (h *groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		if err := h.handler(session.Context(), msg); err != nil {
-			h.logger.Error("handle message failed",
+		ctx := observability.ExtractKafkaTrace(session.Context(), msg.Headers)
+		ctx, span := otel.Tracer("gophprofile.kafka.consumer").Start(ctx, "kafka.consumer.handle_message")
+		span.SetAttributes(
+			attribute.String("messaging.system", "kafka"),
+			attribute.String("messaging.destination", msg.Topic),
+			attribute.Int("messaging.kafka.partition", int(msg.Partition)),
+			attribute.Int64("messaging.kafka.offset", msg.Offset),
+		)
+		start := time.Now()
+		status := "success"
+		observability.AddQueueDepth(h.service, msg.Topic, 1)
+
+		if err := h.handler(ctx, msg); err != nil {
+			status = "error"
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			observability.LoggerWithTrace(ctx, h.logger).Error("handle message failed",
 				"topic", msg.Topic,
 				"partition", msg.Partition,
 				"offset", msg.Offset,
@@ -76,6 +99,10 @@ func (h *groupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 			)
 			// Продолжаем обработку — не крашим воркер.
 		}
+		observability.ObserveKafkaMessage(h.service, msg.Topic, "consumer", status)
+		observability.ObserveOperation("kafka_consumer", "handle_message", status, time.Since(start))
+		observability.AddQueueDepth(h.service, msg.Topic, -1)
+		span.End()
 		session.MarkMessage(msg, "")
 	}
 	return nil

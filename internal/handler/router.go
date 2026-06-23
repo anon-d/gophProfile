@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/anon-d/gophProfile/internal/observability"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 
@@ -25,7 +26,7 @@ func NewRouter(
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Logger)
+	r.Use(observability.HTTPMiddleware(logger))
 
 	avatarH := NewAvatarHandler(svc, logger)
 	healthH := NewHealthHandler(pool, minioClient)
@@ -33,6 +34,7 @@ func NewRouter(
 
 	// Health.
 	r.Get("/health", healthH.Health)
+	r.Handle("/metrics", observability.MetricsHandler())
 
 	// REST API.
 	r.Route("/api/v1", func(r chi.Router) {

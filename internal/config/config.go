@@ -12,6 +12,7 @@ type Config struct {
 	Postgres PostgresConfig
 	Minio    MinioConfig
 	Kafka    KafkaConfig
+	Obs      ObservabilityConfig
 	LogLevel string
 }
 
@@ -42,6 +43,13 @@ type KafkaConfig struct {
 	GroupID     string
 }
 
+// ObservabilityConfig — настройки наблюдаемости.
+type ObservabilityConfig struct {
+	OTLPEndpoint         string
+	Environment          string
+	WorkerMetricsAddress string
+}
+
 // Load читает конфигурацию из переменных окружения.
 func Load() *Config {
 	return &Config{
@@ -63,6 +71,11 @@ func Load() *Config {
 			TopicUpload: getEnv("KAFKA_TOPIC_UPLOAD", "avatar-upload"),
 			TopicDelete: getEnv("KAFKA_TOPIC_DELETE", "avatar-delete"),
 			GroupID:     getEnv("KAFKA_GROUP_ID", "avatar-workers"),
+		},
+		Obs: ObservabilityConfig{
+			OTLPEndpoint:         getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
+			Environment:          getEnv("APP_ENV", "development"),
+			WorkerMetricsAddress: getEnv("WORKER_METRICS_ADDRESS", ":9091"),
 		},
 		LogLevel: getEnv("LOG_LEVEL", "info"),
 	}

@@ -56,6 +56,15 @@ services:
       timeout: 10s
       retries: 10
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+
   migrator:
     build: .
     command: ["./migrator"]
@@ -70,6 +79,9 @@ services:
     ports:
       - "8080:8080"
     env_file: .env
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      APP_ENV: docker
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,11 +91,19 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_started
 
   worker:
     build: .
     command: ["./worker"]
+    ports:
+      - "9091:9091"
     env_file: .env
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      APP_ENV: docker
+      WORKER_METRICS_ADDRESS: ":9091"
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,7 +113,81 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_started
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "9093:9093"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      server:
+        condition: service_started
+      worker:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/loki.yml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    depends_on:
+      loki:
+        condition: service_started
+    volumes:
+      - ./deploy/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
 volumes:
   pgdata:
   miniodata:
+  prometheus-data:
+  alertmanager-data:
+  loki-data:
+  grafana-storage:
