@@ -16,17 +16,21 @@ import (
 	"github.com/anon-d/gophProfile/internal/handler"
 	"github.com/anon-d/gophProfile/internal/kafka"
 	"github.com/anon-d/gophProfile/internal/logger"
+	"github.com/anon-d/gophProfile/internal/observability"
 	miniorepo "github.com/anon-d/gophProfile/internal/repository/minio"
 	pgrepo "github.com/anon-d/gophProfile/internal/repository/postgres"
 	"github.com/anon-d/gophProfile/internal/service"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // App — HTTP-сервер с зависимостями.
 type App struct {
-	server   *http.Server
-	pool     *pgxpool.Pool
-	producer *kafka.Producer
-	log      *slog.Logger
+	server        *http.Server
+	pool          *pgxpool.Pool
+	producer      *kafka.Producer
+	log           *slog.Logger
+	obsShutdown   func(context.Context) error
+	stopDBMetrics context.CancelFunc
 }
 
 // NewApp инициализирует все компоненты и возвращает App.
@@ -35,6 +39,14 @@ func NewApp() (*App, error) {
 	log := logger.Setup(cfg.LogLevel)
 
 	ctx := context.Background()
+	obsShutdown, err := observability.Init(ctx, observability.Config{
+		ServiceName:  "gophprofile-server",
+		Environment:  cfg.Obs.Environment,
+		OTLPEndpoint: cfg.Obs.OTLPEndpoint,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("init observability: %w", err)
+	}
 
 	// PostgreSQL.
 	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN)
@@ -45,6 +57,7 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("postgres ping: %w", err)
 	}
 	log.Info("connected to postgres")
+	stopDBMetrics := observability.StartDBStatsCollector(ctx, pool, "server", 10*time.Second)
 
 	pgRepo := pgrepo.New(pool)
 
@@ -63,7 +76,7 @@ func NewApp() (*App, error) {
 	log.Info("connected to minio")
 
 	// Kafka producer.
-	producer, err := kafka.NewProducer(cfg.Kafka.Brokers)
+	producer, err := kafka.NewProducer("server", cfg.Kafka.Brokers)
 	if err != nil {
 		return nil, fmt.Errorf("kafka producer: %w", err)
 	}
@@ -77,14 +90,16 @@ func NewApp() (*App, error) {
 
 	srv := &http.Server{
 		Addr:    cfg.Server.Address,
-		Handler: router,
+		Handler: otelhttp.NewHandler(router, "http.server"),
 	}
 
 	return &App{
-		server:   srv,
-		pool:     pool,
-		producer: producer,
-		log:      log,
+		server:        srv,
+		pool:          pool,
+		producer:      producer,
+		log:           log,
+		obsShutdown:   obsShutdown,
+		stopDBMetrics: stopDBMetrics,
 	}, nil
 }
 
@@ -105,6 +120,9 @@ func (a *App) Shutdown() error {
 		a.log.Error("server shutdown", "error", err)
 		shutdownErr = err
 	}
+	if a.stopDBMetrics != nil {
+		a.stopDBMetrics()
+	}
 
 	a.pool.Close()
 
@@ -112,6 +130,15 @@ func (a *App) Shutdown() error {
 		a.log.Error("kafka producer close", "error", err)
 		if shutdownErr == nil {
 			shutdownErr = err
+		}
+	}
+
+	if a.obsShutdown != nil {
+		if err := a.obsShutdown(ctx); err != nil {
+			a.log.Error("otel shutdown", "error", err)
+			if shutdownErr == nil {
+				shutdownErr = err
+			}
 		}
 	}
 

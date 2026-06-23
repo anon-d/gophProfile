@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/anon-d/gophProfile/internal/observability"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/anon-d/gophProfile/internal/service"
@@ -12,9 +13,9 @@ import (
 
 // WebHandler — обработчики веб-интерфейса.
 type WebHandler struct {
-	svc      *service.AvatarService
-	logger   *slog.Logger
-	tmplDir  string
+	svc     *service.AvatarService
+	logger  *slog.Logger
+	tmplDir string
 }
 
 // NewWebHandler создаёт веб-обработчик.
@@ -45,7 +46,7 @@ func (h *WebHandler) UploadAction(w http.ResponseWriter, r *http.Request) {
 	mimeType := header.Header.Get("Content-Type")
 	_, err = h.svc.Upload(r.Context(), userID, header.Filename, mimeType, header.Size, file)
 	if err != nil {
-		h.logger.Error("web upload failed", "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("web upload failed", "error", err)
 		http.Error(w, "Upload failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -59,14 +60,14 @@ func (h *WebHandler) Gallery(w http.ResponseWriter, r *http.Request) {
 
 	avatars, err := h.svc.ListByUserID(r.Context(), userID)
 	if err != nil {
-		h.logger.Error("gallery list failed", "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("gallery list failed", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	tmpl, err := template.ParseFiles("web/templates/gallery.html")
 	if err != nil {
-		h.logger.Error("parse gallery template", "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("parse gallery template", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -81,6 +82,6 @@ func (h *WebHandler) Gallery(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.Execute(w, data); err != nil {
-		h.logger.Error("execute gallery template", "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("execute gallery template", "error", err)
 	}
 }

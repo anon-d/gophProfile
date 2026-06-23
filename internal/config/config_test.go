@@ -5,7 +5,16 @@ import "testing"
 func TestLoad_Defaults(t *testing.T) {
 	// t.Setenv автоматически восстанавливает значение после теста.
 	// Устанавливаем пустые значения, чтобы проверить дефолты.
-	for _, key := range []string{"SERVER_ADDRESS", "DATABASE_URL", "MINIO_ENDPOINT", "KAFKA_BROKERS", "LOG_LEVEL"} {
+	for _, key := range []string{
+		"SERVER_ADDRESS",
+		"DATABASE_URL",
+		"MINIO_ENDPOINT",
+		"KAFKA_BROKERS",
+		"LOG_LEVEL",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"APP_ENV",
+		"WORKER_METRICS_ADDRESS",
+	} {
 		t.Setenv(key, "")
 	}
 
@@ -28,6 +37,12 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if len(cfg.Kafka.Brokers) != 1 || cfg.Kafka.Brokers[0] != "localhost:9092" {
 		t.Errorf("expected [localhost:9092], got %v", cfg.Kafka.Brokers)
+	}
+	if cfg.Obs.OTLPEndpoint != "localhost:4317" {
+		t.Errorf("expected localhost:4317, got %s", cfg.Obs.OTLPEndpoint)
+	}
+	if cfg.Obs.WorkerMetricsAddress != ":9091" {
+		t.Errorf("expected :9091, got %s", cfg.Obs.WorkerMetricsAddress)
 	}
 }
 
