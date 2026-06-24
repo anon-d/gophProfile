@@ -1,0 +1,34 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Собрать все бинарники
+    cmds:
+      - go build -o bin/server ./cmd/server
+      - go build -o bin/worker ./cmd/worker
+      - go build -o bin/migrator ./cmd/migrator
+
+  test:
+    desc: Запустить тесты
+    cmds:
+      - go test ./internal/... -v -count=1
+
+  lint:
+    desc: Запустить линтер
+    cmds:
+      - golangci-lint run ./...
+
+  up:
+    desc: Запустить всё через Docker Compose
+    cmds:
+      - docker compose up --build -d
+
+  down:
+    desc: Остановить Docker Compose
+    cmds:
+      - docker compose down -v
+
+  migrate:
+    desc: Применить миграции
+    cmds:
+      - go run ./cmd/migrator
