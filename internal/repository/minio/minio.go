@@ -28,9 +28,10 @@ func New(ctx context.Context, client *minio.Client, bucket string) (*Repo, error
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("minio", "new_repo", status, time.Since(start))
+		observability.ObserveOperation("minio", "new_repo", status, duration)
 	}()
 	exists, err := client.BucketExists(ctx, bucket)
 	if err != nil {
@@ -77,9 +78,10 @@ func (r *Repo) Put(ctx context.Context, key string, reader io.Reader, size int64
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("minio", "put_object", status, time.Since(start))
+		observability.ObserveOperation("minio", "put_object", status, duration)
 	}()
 	_, err := r.client.PutObject(ctx, r.bucket, key, reader, size, minio.PutObjectOptions{
 		ContentType: contentType,
@@ -108,9 +110,10 @@ func (r *Repo) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("minio", "get_object", status, time.Since(start))
+		observability.ObserveOperation("minio", "get_object", status, duration)
 	}()
 	obj, err := r.client.GetObject(ctx, r.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
@@ -142,9 +145,10 @@ func (r *Repo) Delete(ctx context.Context, key string) error {
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("minio", "delete_object", status, time.Since(start))
+		observability.ObserveOperation("minio", "delete_object", status, duration)
 	}()
 	if err := r.client.RemoveObject(ctx, r.bucket, key, minio.RemoveObjectOptions{}); err != nil {
 		status = "error"

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,14 +25,18 @@ import (
 func main() {
 	cfg := config.Load()
 	slogger := logger.Setup(cfg.LogLevel)
-	rootCtx := context.Background()
-	obsShutdown, err := observability.Init(rootCtx, observability.Config{
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	obsShutdown, err := observability.Init(ctx, observability.Config{
 		ServiceName:  "gophprofile-worker",
 		Environment:  cfg.Obs.Environment,
 		OTLPEndpoint: cfg.Obs.OTLPEndpoint,
 	})
 	if err != nil {
-		log.Fatalf("init observability: %v", err)
+		slogger.Error("init observability failed", "error", err)
+		os.Exit(1)
 	}
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -43,13 +46,11 @@ func main() {
 		}
 	}()
 
-	ctx, cancel := context.WithCancel(rootCtx)
-	defer cancel()
-
 	// PostgreSQL.
 	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN)
 	if err != nil {
-		log.Fatalf("postgres: %v", err)
+		slogger.Error("postgres init failed", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 	stopDBMetrics := observability.StartDBStatsCollector(ctx, pool, "worker", 10*time.Second)
@@ -63,11 +64,13 @@ func main() {
 		Secure: cfg.Minio.UseSSL,
 	})
 	if err != nil {
-		log.Fatalf("minio client: %v", err)
+		slogger.Error("minio client init failed", "error", err)
+		os.Exit(1)
 	}
 	s3Repo, err := miniorepo.New(ctx, mc, cfg.Minio.Bucket)
 	if err != nil {
-		log.Fatalf("minio repo: %v", err)
+		slogger.Error("minio repo init failed", "error", err)
+		os.Exit(1)
 	}
 
 	// Worker.
@@ -77,7 +80,8 @@ func main() {
 	topics := []string{cfg.Kafka.TopicUpload, cfg.Kafka.TopicDelete}
 	consumer, err := kafka.NewConsumer("worker", cfg.Kafka.Brokers, cfg.Kafka.GroupID, topics, w.HandleMessage, slogger)
 	if err != nil {
-		log.Fatalf("kafka consumer: %v", err)
+		slogger.Error("kafka consumer init failed", "error", err)
+		os.Exit(1)
 	}
 	defer consumer.Close()
 
@@ -104,18 +108,10 @@ func main() {
 		slogger.Info("worker metrics endpoint started", "addr", cfg.Obs.WorkerMetricsAddress)
 	}
 
-	// Graceful shutdown.
-	go func() {
-		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-		<-stop
-		slogger.Info("shutting down worker...")
-		cancel()
-	}()
-
 	slogger.Info("worker started", "topics", topics)
 	if err := consumer.Run(ctx); err != nil && ctx.Err() == nil {
-		log.Fatalf("consumer run: %v", err)
+		slogger.Error("consumer run failed", "error", err)
+		os.Exit(1)
 	}
 	slogger.Info("worker stopped")
 }

@@ -97,10 +97,11 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mimeType s
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveUpload(userID, status, time.Since(start))
-		observability.ObserveOperation("service", "upload", status, time.Since(start))
+		observability.ObserveUpload(userID, status, duration)
+		observability.ObserveOperation("service", "upload", status, duration)
 	}()
 
 	if size > MaxUploadSize {
@@ -143,7 +144,10 @@ func (s *AvatarService) Upload(ctx context.Context, userID, fileName, mimeType s
 
 	// Обновляем S3-ключ в БД.
 	if err := s.db.UpdateS3Key(ctx, created.ID, s3Key); err != nil {
-		observability.LoggerWithTrace(ctx, s.logger).Error("update s3 key failed", "avatar_id", created.ID, "error", err)
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, fmt.Errorf("update s3 key in db: %w", err)
 	}
 	created.S3Key = s3Key
 
@@ -168,9 +172,10 @@ func (s *AvatarService) GetByID(ctx context.Context, id string) (*domain.Avatar,
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("service", "get_by_id", status, time.Since(start))
+		observability.ObserveOperation("service", "get_by_id", status, duration)
 	}()
 
 	avatar, err := s.db.GetAvatarByID(ctx, id)
@@ -190,9 +195,10 @@ func (s *AvatarService) GetByUserID(ctx context.Context, userID string) (*domain
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("service", "get_by_user_id", status, time.Since(start))
+		observability.ObserveOperation("service", "get_by_user_id", status, duration)
 	}()
 
 	avatar, err := s.db.GetAvatarByUserID(ctx, userID)
@@ -212,9 +218,10 @@ func (s *AvatarService) ListByUserID(ctx context.Context, userID string) ([]*dom
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("service", "list_by_user_id", status, time.Since(start))
+		observability.ObserveOperation("service", "list_by_user_id", status, duration)
 	}()
 
 	avatars, err := s.db.ListAvatarsByUserID(ctx, userID)
@@ -234,9 +241,10 @@ func (s *AvatarService) GetFile(ctx context.Context, s3Key string) (io.ReadClose
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("service", "get_file", status, time.Since(start))
+		observability.ObserveOperation("service", "get_file", status, duration)
 	}()
 
 	rc, err := s.s3.Get(ctx, s3Key)
@@ -259,9 +267,10 @@ func (s *AvatarService) Delete(ctx context.Context, avatarID, userID string) err
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("service", "delete", status, time.Since(start))
+		observability.ObserveOperation("service", "delete", status, duration)
 	}()
 
 	avatar, err := s.db.GetAvatarByID(ctx, avatarID)
@@ -313,9 +322,10 @@ func (s *AvatarService) DeleteByUserID(ctx context.Context, userID string) error
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("service", "delete_by_user_id", status, time.Since(start))
+		observability.ObserveOperation("service", "delete_by_user_id", status, duration)
 	}()
 
 	avatars, err := s.db.ListAvatarsByUserID(ctx, userID)

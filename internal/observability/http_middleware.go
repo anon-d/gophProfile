@@ -61,7 +61,7 @@ func HTTPMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			case rw.status >= http.StatusInternalServerError:
 				reqLogger.Error("http request completed", logAttrs...)
 			case rw.status >= http.StatusBadRequest:
-				reqLogger.Warn("http request completed", logAttrs...)
+				reqLogger.Debug("http request completed", logAttrs...)
 			default:
 				reqLogger.Info("http request completed", logAttrs...)
 			}

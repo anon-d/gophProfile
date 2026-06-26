@@ -48,9 +48,10 @@ func (r *Repo) CreateAvatar(ctx context.Context, a *domain.Avatar) (*domain.Avat
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "create_avatar", status, time.Since(start))
+		observability.ObserveOperation("postgres", "create_avatar", status, duration)
 	}()
 	row, err := r.q.CreateAvatar(ctx, db.CreateAvatarParams{
 		UserID:    a.UserID,
@@ -80,9 +81,10 @@ func (r *Repo) GetAvatarByID(ctx context.Context, id string) (*domain.Avatar, er
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "get_avatar_by_id", status, time.Since(start))
+		observability.ObserveOperation("postgres", "get_avatar_by_id", status, duration)
 	}()
 	row, err := r.q.GetAvatarByID(ctx, uuidToPgtype(id))
 	if err != nil {
@@ -105,9 +107,10 @@ func (r *Repo) GetAvatarByUserID(ctx context.Context, userID string) (*domain.Av
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "get_avatar_by_user_id", status, time.Since(start))
+		observability.ObserveOperation("postgres", "get_avatar_by_user_id", status, duration)
 	}()
 	row, err := r.q.GetAvatarByUserID(ctx, userID)
 	if err != nil {
@@ -130,9 +133,10 @@ func (r *Repo) ListAvatarsByUserID(ctx context.Context, userID string) ([]*domai
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "list_avatars_by_user_id", status, time.Since(start))
+		observability.ObserveOperation("postgres", "list_avatars_by_user_id", status, duration)
 	}()
 	rows, err := r.q.ListAvatarsByUserID(ctx, userID)
 	if err != nil {
@@ -160,9 +164,10 @@ func (r *Repo) SoftDeleteAvatar(ctx context.Context, id, userID string) (bool, e
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "soft_delete_avatar", status, time.Since(start))
+		observability.ObserveOperation("postgres", "soft_delete_avatar", status, duration)
 	}()
 	tag, err := r.q.SoftDeleteAvatar(ctx, db.SoftDeleteAvatarParams{
 		ID:     uuidToPgtype(id),
@@ -188,9 +193,10 @@ func (r *Repo) SoftDeleteAvatarByUserID(ctx context.Context, userID string) (boo
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "soft_delete_avatar_by_user_id", status, time.Since(start))
+		observability.ObserveOperation("postgres", "soft_delete_avatar_by_user_id", status, duration)
 	}()
 	tag, err := r.q.SoftDeleteAvatarByUserID(ctx, userID)
 	if err != nil {
@@ -214,9 +220,10 @@ func (r *Repo) UpdateProcessingStatus(ctx context.Context, id, status string, th
 	start := time.Now()
 	opStatus := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", opStatus))
 		span.End()
-		observability.ObserveOperation("postgres", "update_processing_status", opStatus, time.Since(start))
+		observability.ObserveOperation("postgres", "update_processing_status", opStatus, duration)
 	}()
 	var thumbJSON []byte
 	if thumbnails != nil {
@@ -254,9 +261,10 @@ func (r *Repo) UpdateS3Key(ctx context.Context, id, s3Key string) error {
 	start := time.Now()
 	status := "success"
 	defer func() {
+		duration := time.Since(start)
 		span.SetAttributes(attribute.String("status", status))
 		span.End()
-		observability.ObserveOperation("postgres", "update_s3_key", status, time.Since(start))
+		observability.ObserveOperation("postgres", "update_s3_key", status, duration)
 	}()
 
 	if err := r.q.UpdateS3Key(ctx, db.UpdateS3KeyParams{
