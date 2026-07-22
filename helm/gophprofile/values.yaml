@@ -1,0 +1,140 @@
+replicaCount: 3
+
+image:
+  repository: avatar-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: false
+
+rbac:
+  create: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  metricsPort: 8080
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: avatars.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+livenessProbe:
+  path: /health
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  path: /health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  cpuUtilization: 70
+  memoryUtilization: 80
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceLabel:
+    name: ingress-nginx
+  egress:
+    - namespaceLabels:
+        name: database
+      ports:
+        - protocol: TCP
+          port: 5432
+    - namespaceLabels:
+        name: messaging
+      ports:
+        - protocol: TCP
+          port: 9092
+    - namespaceLabels:
+        name: storage
+      ports:
+        - protocol: TCP
+          port: 9000
+    - namespaceLabels:
+        kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+config:
+  SERVER_ADDRESS: ":8080"
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_BUCKET: "avatars"
+  MINIO_USE_SSL: "false"
+  KAFKA_BROKERS: "kafka:9092"
+  KAFKA_TOPIC_UPLOAD: "avatar-upload"
+  KAFKA_TOPIC_DELETE: "avatar-delete"
+  KAFKA_GROUP_ID: "avatar-workers"
+  APP_ENV: "production"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+  LOG_LEVEL: "info"
+  max_file_size: "10485760"
+  allowed_mime_types: "image/jpeg,image/png,image/webp"
+  s3_bucket: "avatars"
+
+secret:
+  DATABASE_URL: "postgres://gophprofile:gophprofile@postgres:5432/gophprofile?sslmode=disable"
+  MINIO_ACCESS_KEY: "replace-me"
+  MINIO_SECRET_KEY: "replace-me"
+  rabbitmq-url: "amqp://replace-me"
+  s3-access-key: "replace-me"
+  s3-secret-key: "replace-me"
+
+migrationJob:
+  enabled: true
+  backoffLimit: 1
