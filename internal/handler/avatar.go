@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/anon-d/gophProfile/internal/domain"
+	"github.com/anon-d/gophProfile/internal/observability"
 	"github.com/anon-d/gophProfile/internal/service"
 )
 
@@ -89,7 +90,7 @@ func (h *AvatarHandler) Upload(w http.ResponseWriter, r *http.Request) {
 				"details": "Supported formats: jpeg, png, webp",
 			})
 		default:
-			h.logger.Error("upload failed", "error", err)
+			observability.LoggerWithTrace(r.Context(), h.logger).Error("upload failed", "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		}
 		return
@@ -126,7 +127,7 @@ func (h *AvatarHandler) GetAvatar(w http.ResponseWriter, r *http.Request) {
 	// Получаем файл из S3.
 	rc, err := h.svc.GetFile(r.Context(), s3Key)
 	if err != nil {
-		h.logger.Error("get file from s3 failed", "s3_key", s3Key, "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("get file from s3 failed", "s3_key", s3Key, "error", err)
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Avatar not found"})
 		return
 	}
@@ -200,7 +201,7 @@ func (h *AvatarHandler) ListUserAvatars(w http.ResponseWriter, r *http.Request) 
 
 	avatars, err := h.svc.ListByUserID(r.Context(), userID)
 	if err != nil {
-		h.logger.Error("list avatars failed", "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("list avatars failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		return
 	}
@@ -229,7 +230,7 @@ func (h *AvatarHandler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrAlreadyDeleted):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Avatar not found"})
 		default:
-			h.logger.Error("delete avatar failed", "error", err)
+			observability.LoggerWithTrace(r.Context(), h.logger).Error("delete avatar failed", "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		}
 		return
@@ -258,7 +259,7 @@ func (h *AvatarHandler) DeleteUserAvatar(w http.ResponseWriter, r *http.Request)
 
 	err := h.svc.DeleteByUserID(r.Context(), pathUserID)
 	if err != nil {
-		h.logger.Error("delete user avatars failed", "error", err)
+		observability.LoggerWithTrace(r.Context(), h.logger).Error("delete user avatars failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 		return
 	}

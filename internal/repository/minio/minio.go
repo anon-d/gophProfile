@@ -6,8 +6,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
+	"github.com/anon-d/gophProfile/internal/observability"
 	"github.com/minio/minio-go/v7"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // Repo — репозиторий для работы с MinIO.
@@ -18,12 +23,28 @@ type Repo struct {
 
 // New создаёт MinIO-репозиторий, при необходимости создаёт бакет.
 func New(ctx context.Context, client *minio.Client, bucket string) (*Repo, error) {
+	ctx, span := otel.Tracer("gophprofile.repository.minio").Start(ctx, "minio.new_repo")
+	span.SetAttributes(attribute.String("bucket", bucket))
+	start := time.Now()
+	status := "success"
+	defer func() {
+		duration := time.Since(start)
+		span.SetAttributes(attribute.String("status", status))
+		span.End()
+		observability.ObserveOperation("minio", "new_repo", status, duration)
+	}()
 	exists, err := client.BucketExists(ctx, bucket)
 	if err != nil {
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, fmt.Errorf("check bucket: %w", err)
 	}
 	if !exists {
 		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+			status = "error"
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, fmt.Errorf("create bucket: %w", err)
 		}
 	}
@@ -47,10 +68,28 @@ func ThumbnailKey(avatarID, size string) string {
 
 // Put загружает файл в MinIO.
 func (r *Repo) Put(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
+	ctx, span := otel.Tracer("gophprofile.repository.minio").Start(ctx, "minio.put_object")
+	span.SetAttributes(
+		attribute.String("bucket", r.bucket),
+		attribute.String("key", key),
+		attribute.Int64("size", size),
+		attribute.String("content_type", contentType),
+	)
+	start := time.Now()
+	status := "success"
+	defer func() {
+		duration := time.Since(start)
+		span.SetAttributes(attribute.String("status", status))
+		span.End()
+		observability.ObserveOperation("minio", "put_object", status, duration)
+	}()
 	_, err := r.client.PutObject(ctx, r.bucket, key, reader, size, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("put object %s: %w", key, err)
 	}
 	return nil
@@ -63,8 +102,24 @@ func (r *Repo) PutBytes(ctx context.Context, key string, data []byte, contentTyp
 
 // Get возвращает reader для чтения файла.
 func (r *Repo) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	ctx, span := otel.Tracer("gophprofile.repository.minio").Start(ctx, "minio.get_object")
+	span.SetAttributes(
+		attribute.String("bucket", r.bucket),
+		attribute.String("key", key),
+	)
+	start := time.Now()
+	status := "success"
+	defer func() {
+		duration := time.Since(start)
+		span.SetAttributes(attribute.String("status", status))
+		span.End()
+		observability.ObserveOperation("minio", "get_object", status, duration)
+	}()
 	obj, err := r.client.GetObject(ctx, r.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, fmt.Errorf("get object %s: %w", key, err)
 	}
 	return obj, nil
@@ -82,7 +137,23 @@ func (r *Repo) GetBytes(ctx context.Context, key string) ([]byte, error) {
 
 // Delete удаляет объект.
 func (r *Repo) Delete(ctx context.Context, key string) error {
+	ctx, span := otel.Tracer("gophprofile.repository.minio").Start(ctx, "minio.delete_object")
+	span.SetAttributes(
+		attribute.String("bucket", r.bucket),
+		attribute.String("key", key),
+	)
+	start := time.Now()
+	status := "success"
+	defer func() {
+		duration := time.Since(start)
+		span.SetAttributes(attribute.String("status", status))
+		span.End()
+		observability.ObserveOperation("minio", "delete_object", status, duration)
+	}()
 	if err := r.client.RemoveObject(ctx, r.bucket, key, minio.RemoveObjectOptions{}); err != nil {
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("delete object %s: %w", key, err)
 	}
 	return nil

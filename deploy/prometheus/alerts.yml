@@ -1,0 +1,22 @@
+groups:
+  - name: avatar-service
+    rules:
+      - alert: HighErrorRate
+        expr: (sum(rate(avatars_uploads_total{status="error"}[5m])) / clamp_min(sum(rate(avatars_uploads_total[5m])), 1)) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: gophprofile
+        annotations:
+          summary: "Высокий процент ошибок загрузки аватарок"
+          description: "Доля ошибок загрузки аватарок превышает 10% более 5 минут."
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, sum(rate(avatars_http_request_duration_seconds_bucket{route!="/metrics"}[5m])) by (le)) > 1.5
+        for: 2m
+        labels:
+          severity: critical
+          service: gophprofile
+        annotations:
+          summary: "Высокое время ответа API"
+          description: "95-й перцентиль времени ответа HTTP-запросов превышает 1.5 секунды более 2 минут."
