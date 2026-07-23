@@ -14,6 +14,7 @@ spec:
       labels:
         app: avatar-service
     spec:
+      terminationGracePeriodSeconds: 20
       serviceAccountName: avatar-service
       securityContext:
         runAsNonRoot: true
