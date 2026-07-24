@@ -1,0 +1,19 @@
+replicaCount: 3
+
+ingress:
+  hosts:
+    - host: avatars.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  cpuUtilization: 70
+  memoryUtilization: 80
+
+config:
+  APP_ENV: "production"
+  LOG_LEVEL: "info"

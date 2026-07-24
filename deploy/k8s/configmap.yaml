@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: avatar-config
+  labels:
+    app: avatar-service
+data:
+  SERVER_ADDRESS: ":8080"
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_BUCKET: "avatars"
+  MINIO_USE_SSL: "false"
+  KAFKA_BROKERS: "kafka:9092"
+  KAFKA_TOPIC_UPLOAD: "avatar-upload"
+  KAFKA_TOPIC_DELETE: "avatar-delete"
+  KAFKA_GROUP_ID: "avatar-workers"
+  APP_ENV: "production"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+  LOG_LEVEL: "info"
+  max_file_size: "10485760"
+  allowed_mime_types: "image/jpeg,image/png,image/webp"
+  s3_bucket: "avatars"

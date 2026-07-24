@@ -1,0 +1,15 @@
+replicaCount: 1
+
+ingress:
+  hosts:
+    - host: avatars-dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+autoscaling:
+  enabled: false
+
+config:
+  APP_ENV: "development"
+  LOG_LEVEL: "debug"

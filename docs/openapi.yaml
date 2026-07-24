@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: GophProfile API
+  version: 1.0.0
+  description: API микросервиса управления аватарками пользователей.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Проверка состояния сервиса
+      responses:
+        "200":
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /metrics:
+    get:
+      summary: Метрики Prometheus
+      responses:
+        "200":
+          description: Метрики в формате Prometheus
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/v1/avatars:
+    post:
+      summary: Загрузка аватарки
+      parameters:
+        - name: X-User-ID
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Аватарка создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarMetadata"
+        "400":
+          description: Ошибка валидации
+  /api/v1/avatars/{avatar_id}:
+    get:
+      summary: Получение файла аватарки
+      parameters:
+        - $ref: "#/components/parameters/AvatarID"
+      responses:
+        "200":
+          description: Файл аватарки
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Аватарка не найдена
+    delete:
+      summary: Удаление аватарки
+      parameters:
+        - $ref: "#/components/parameters/AvatarID"
+      responses:
+        "204":
+          description: Удалено
+        "404":
+          description: Аватарка не найдена
+  /api/v1/avatars/{avatar_id}/metadata:
+    get:
+      summary: Получение метаданных аватарки
+      parameters:
+        - $ref: "#/components/parameters/AvatarID"
+      responses:
+        "200":
+          description: Метаданные
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarMetadata"
+        "404":
+          description: Аватарка не найдена
+  /api/v1/users/{user_id}/avatar:
+    get:
+      summary: Получение текущей аватарки пользователя
+      parameters:
+        - $ref: "#/components/parameters/UserID"
+      responses:
+        "200":
+          description: Файл аватарки
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Аватарка не найдена
+    delete:
+      summary: Удаление всех аватарок пользователя
+      parameters:
+        - $ref: "#/components/parameters/UserID"
+      responses:
+        "204":
+          description: Удалено
+  /api/v1/users/{user_id}/avatars:
+    get:
+      summary: Получение списка аватарок пользователя
+      parameters:
+        - $ref: "#/components/parameters/UserID"
+      responses:
+        "200":
+          description: Список метаданных
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AvatarMetadata"
+components:
+  parameters:
+    AvatarID:
+      name: avatar_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserID:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    AvatarMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        file_name:
+          type: string
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+        s3_key:
+          type: string
+        upload_status:
+          type: string
+        processing_status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
